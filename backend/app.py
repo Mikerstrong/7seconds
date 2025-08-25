@@ -1,7 +1,10 @@
 import os
 import sqlite3
-from flask import Flask, jsonify, request
+import time
+import threading
+from flask import Flask, jsonify, request, session
 from flask_cors import CORS
+from datetime import datetime, timezone
 
 DB_PATH = os.environ.get("DB_PATH", "/data/score.db")
 
@@ -13,17 +16,67 @@ def get_db():
 
 
 app = Flask(__name__)
-CORS(app)
+app.secret_key = os.environ.get("SECRET_KEY", "dev_secret_key")
+CORS(app, supports_credentials=True)
 
-# Ensure database and seed row exists
+# Ensure database and seed tables exist
 os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 conn = sqlite3.connect(DB_PATH)
 cur = conn.cursor()
-cur.execute("CREATE TABLE IF NOT EXISTS score (id INTEGER PRIMARY KEY, value INTEGER NOT NULL)")
-conn.commit()
-cur.execute("INSERT OR IGNORE INTO score (id, value) VALUES (1, 0)")
+
+# User table
+cur.execute("""
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY,
+    username TEXT UNIQUE NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)
+""")
+
+# Points table (stores both points and action points)
+cur.execute("""
+CREATE TABLE IF NOT EXISTS user_points (
+    user_id INTEGER PRIMARY KEY,
+    points INTEGER DEFAULT 0,
+    action_points INTEGER DEFAULT 0,
+    last_point_time TIMESTAMP,
+    last_ap_conversion TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+)
+""")
+
+# Create default user if none exist
+cur.execute("INSERT OR IGNORE INTO users (id, username) VALUES (1, 'default')")
+cur.execute("INSERT OR IGNORE INTO user_points (user_id, points, action_points) VALUES (1, 0, 0)")
 conn.commit()
 conn.close()
+
+# Background thread to convert points to action points every minute
+def convert_points_to_ap():
+    while True:
+        try:
+            conn = get_db()
+            cur = conn.cursor()
+            
+            # Get all users who haven't had a conversion in the last minute
+            now = datetime.now(timezone.utc).isoformat()
+            cur.execute("""
+                UPDATE user_points 
+                SET action_points = action_points + (points / 10), 
+                    last_ap_conversion = ? 
+                WHERE julianday(?) - julianday(last_ap_conversion) >= 0.00069444 OR last_ap_conversion IS NULL
+            """, (now, now))
+            
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            print(f"Error in AP conversion thread: {e}")
+        
+        time.sleep(60)  # Run every 60 seconds
+
+# Start the background thread
+ap_thread = threading.Thread(target=convert_points_to_ap, daemon=True)
+ap_thread.start()
 
 
 @app.route("/api/health", methods=["GET"])
@@ -31,39 +84,129 @@ def health():
     return jsonify({"status": "ok"})
 
 
-@app.route("/api/score", methods=["GET"])
-def get_score():
+@app.route("/api/users", methods=["GET"])
+def get_users():
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT value FROM score WHERE id=1")
+    cur.execute("SELECT id, username FROM users ORDER BY username")
+    users = [{"id": row[0], "username": row[1]} for row in cur.fetchall()]
+    conn.close()
+    return jsonify({"users": users})
+
+
+@app.route("/api/users", methods=["POST"])
+def create_user():
+    data = request.get_json(silent=True) or {}
+    username = data.get("username")
+    
+    if not username or len(username) < 2:
+        return jsonify({"error": "username must be at least 2 characters"}), 400
+        
+    conn = get_db()
+    cur = conn.cursor()
+    
+    try:
+        cur.execute("INSERT INTO users (username) VALUES (?)", (username,))
+        user_id = cur.lastrowid
+        cur.execute("INSERT INTO user_points (user_id) VALUES (?)", (user_id,))
+        conn.commit()
+        conn.close()
+        return jsonify({"id": user_id, "username": username})
+    except sqlite3.IntegrityError:
+        conn.close()
+        return jsonify({"error": "username already exists"}), 400
+
+
+@app.route("/api/session", methods=["POST"])
+def set_user():
+    data = request.get_json(silent=True) or {}
+    user_id = data.get("user_id")
+    
+    if not user_id:
+        return jsonify({"error": "user_id is required"}), 400
+    
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT id, username FROM users WHERE id = ?", (user_id,))
+    user = cur.fetchone()
+    conn.close()
+    
+    if not user:
+        return jsonify({"error": "user not found"}), 404
+    
+    session["user_id"] = user_id
+    return jsonify({"id": user[0], "username": user[1]})
+
+
+@app.route("/api/session", methods=["GET"])
+def get_user():
+    user_id = session.get("user_id", 1)  # Default to user 1
+    
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT id, username FROM users WHERE id = ?", (user_id,))
+    user = cur.fetchone()
+    
+    if not user:
+        conn.close()
+        return jsonify({"error": "user not found"}), 404
+    
+    conn.close()
+    return jsonify({"id": user[0], "username": user[1]})
+
+
+@app.route("/api/points", methods=["GET"])
+def get_points():
+    user_id = session.get("user_id", 1)  # Default to user 1
+    
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT points, action_points 
+        FROM user_points 
+        WHERE user_id = ?
+    """, (user_id,))
     row = cur.fetchone()
     conn.close()
-    value = row[0] if row else 0
-    return jsonify({"score": value})
+    
+    if not row:
+        return jsonify({"points": 0, "action_points": 0})
+    
+    return jsonify({"points": row[0], "action_points": row[1]})
 
 
-@app.route("/api/score", methods=["POST"])
-def post_score():
+@app.route("/api/points", methods=["POST"])
+def update_points():
+    user_id = session.get("user_id", 1)  # Default to user 1
     data = request.get_json(silent=True) or {}
-    increment = data.get("increment")
-    set_score = data.get("score")
-
+    increment = data.get("increment", 0)
+    
+    if not isinstance(increment, int):
+        return jsonify({"error": "increment must be an integer"}), 400
+    
     conn = get_db()
     cur = conn.cursor()
-
-    if isinstance(increment, int):
-        cur.execute("UPDATE score SET value = value + ? WHERE id=1", (increment,))
-    elif isinstance(set_score, int):
-        cur.execute("UPDATE score SET value = ? WHERE id=1", (set_score,))
-    else:
-        conn.close()
-        return jsonify({"error": "must provide 'increment' or 'score' as integer"}), 400
-
+    
+    # Update points and last_point_time
+    now = datetime.now(timezone.utc).isoformat()
+    cur.execute("""
+        UPDATE user_points 
+        SET points = points + ?, 
+            last_point_time = ? 
+        WHERE user_id = ?
+    """, (increment, now, user_id))
+    
+    # Retrieve updated points
+    cur.execute("SELECT points, action_points FROM user_points WHERE user_id = ?", (user_id,))
+    row = cur.fetchone()
+    
     conn.commit()
-    cur.execute("SELECT value FROM score WHERE id=1")
-    value = cur.fetchone()[0]
     conn.close()
-    return jsonify({"score": value})
+    
+    if not row:
+        return jsonify({"error": "user not found"}), 404
+        
+    return jsonify({"points": row[0], "action_points": row[1]})
 
 
 if __name__ == "__main__":
