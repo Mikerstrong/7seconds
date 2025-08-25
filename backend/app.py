@@ -17,7 +17,8 @@ def get_db():
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "dev_secret_key")
-CORS(app, supports_credentials=True)
+# Enable CORS with credentials support for cookies/sessions
+CORS(app, supports_credentials=True, origins=["*"], allow_headers=["Content-Type", "Authorization", "X-Requested-With"])
 
 # Ensure database and seed tables exist
 os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
@@ -127,16 +128,32 @@ def set_user():
     if not user_id:
         return jsonify({"error": "user_id is required"}), 400
     
+    # Convert to int if string was passed
+    if isinstance(user_id, str) and user_id.isdigit():
+        user_id = int(user_id)
+    
     conn = get_db()
     cur = conn.cursor()
     cur.execute("SELECT id, username FROM users WHERE id = ?", (user_id,))
     user = cur.fetchone()
-    conn.close()
     
     if not user:
-        return jsonify({"error": "user not found"}), 404
+        # User not found, try to find any user
+        cur.execute("SELECT id, username FROM users LIMIT 1")
+        user = cur.fetchone()
+        if not user:
+            # Create default user if none exists
+            cur.execute("INSERT OR IGNORE INTO users (id, username) VALUES (1, 'default')")
+            cur.execute("INSERT OR IGNORE INTO user_points (user_id) VALUES (1)")
+            conn.commit()
+            user = (1, 'default')
     
-    session["user_id"] = user_id
+    session["user_id"] = user[0]  # Use the actual user ID
+    conn.close()
+    
+    # Debug print to console
+    print(f"Set user session to user_id: {user[0]}, username: {user[1]}")
+    
     return jsonify({"id": user[0], "username": user[1]})
 
 

@@ -51,9 +51,16 @@ function App() {
     try {
       const res = await fetch(`${API_BASE}/api/users`, { credentials: 'include' })
       const data = await res.json()
-      setUsers(data.users || [])
+      if (Array.isArray(data.users)) {
+        console.log('Got users:', data.users)
+        setUsers(data.users)
+      } else {
+        console.error('Invalid users data', data)
+        setUsers([])
+      }
     } catch (e) {
-      console.error(e)
+      console.error('Error fetching users:', e)
+      setUsers([])
     }
   }
   
@@ -97,40 +104,69 @@ function App() {
   const createUser = async () => {
     if (!newUsername || newUsername.length < 2) return
     try {
+      console.log('Creating user with username:', newUsername)
       const res = await fetch(`${API_BASE}/api/users`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ username: newUsername })
       })
+      
       if (res.ok) {
         const user = await res.json()
+        console.log('User created:', user)
         setNewUsername('')
-        // Refresh user list and select new user
-        await fetchUsers()
-        await selectUser(user.id)
+        
+        // Wait for users list to update before selecting
+        setTimeout(async () => {
+          // Refresh users list
+          await fetchUsers()
+          
+          // Select the new user
+          if (user && user.id) {
+            console.log('Selecting new user with ID:', user.id)
+            await selectUser(user.id)
+          }
+        }, 500)
+      } else {
+        const error = await res.json()
+        console.error('Failed to create user:', error)
       }
     } catch (e) {
-      console.error(e)
+      console.error('Error in createUser:', e)
     }
   }
   
   const selectUser = async (userId) => {
+    if (!userId) {
+      console.error('Cannot select user: No userId provided')
+      return
+    }
+    
     try {
+      console.log('Selecting user with ID:', userId)
       const res = await fetch(`${API_BASE}/api/session`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ user_id: userId })
       })
+      
       if (res.ok) {
         const user = await res.json()
+        console.log('User selected:', user)
+        
+        // Update local state with selected user
         setCurrentUser(user)
+        
+        // Refresh points for the selected user
         await fetchPoints()
-        await fetchCurrentUser()
+      } else {
+        const error = await res.json()
+        console.error('Failed to select user:', error)
       }
     } catch (e) {
-      console.error(e)
+      console.error('Error in selectUser:', e)
     }
   }
 
@@ -163,12 +199,25 @@ function App() {
           <select 
             value={currentUser?.id || ''}
             onChange={(e) => selectUser(Number(e.target.value))}
-            style={{ padding: '8px', marginRight: '10px' }}
+            style={{ padding: '8px', marginRight: '10px', minWidth: '200px' }}
           >
-            {users.map(user => (
-              <option key={user.id} value={user.id}>{user.username}</option>
-            ))}
+            <option value="" disabled>Select a user</option>
+            {users && users.length > 0 ? (
+              users.map(user => (
+                <option key={user.id} value={user.id}>
+                  {user.username}
+                </option>
+              ))
+            ) : (
+              <option value="" disabled>No users available</option>
+            )}
           </select>
+          <button 
+            onClick={fetchUsers}
+            style={{ padding: '8px 16px', marginLeft: '10px' }}
+          >
+            Refresh Users
+          </button>
         </div>
         
         <div style={{ margin: '20px 0' }}>
