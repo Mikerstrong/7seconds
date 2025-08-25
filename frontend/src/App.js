@@ -1,6 +1,15 @@
 import React, { useEffect, useState, useRef } from 'react'
 
-const API_BASE = process.env.REACT_APP_API_BASE || 'http://localhost:3001'
+// If REACT_APP_API_BASE is a relative URL (e.g. /api), use current origin
+// Otherwise use the full URL provided in environment
+const getApiBase = () => {
+  const configuredBase = process.env.REACT_APP_API_BASE || 'http://localhost:3001'
+  if (configuredBase.startsWith('/')) {
+    return `${window.location.origin}${configuredBase}`
+  }
+  return configuredBase
+}
+const API_BASE = getApiBase()
 
 function App() {
   const [timeLeft, setTimeLeft] = useState(7)

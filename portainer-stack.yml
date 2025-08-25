@@ -19,9 +19,12 @@ services:
       dockerfile: Dockerfile
     ports:
       - "7777:7777"
+    depends_on:
+      - backend
     environment:
-      # When deployed inside the same compose network, use the service name to reach the backend
-      - REACT_APP_API_BASE=http://backend:3001
+      # The frontend nginx will proxy /api requests to backend service 
+      # Using relative URL without protocol/host to avoid CORS issues
+      - REACT_APP_API_BASE=/api
     restart: unless-stopped
 
 volumes:
