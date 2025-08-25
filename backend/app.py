@@ -60,9 +60,11 @@ def convert_points_to_ap():
             
             # Get all users who haven't had a conversion in the last minute
             now = datetime.now(timezone.utc).isoformat()
+            # Convert all points to AP at a 1:1 ratio every minute
             cur.execute("""
                 UPDATE user_points 
-                SET action_points = action_points + (points / 10), 
+                SET action_points = action_points + points, 
+                    points = 0,
                     last_ap_conversion = ? 
                 WHERE julianday(?) - julianday(last_ap_conversion) >= 0.00069444 OR last_ap_conversion IS NULL
             """, (now, now))
