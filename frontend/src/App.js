@@ -129,85 +129,7 @@ function App() {
     }, 1000)
   }
   
-  const createUser = async () => {
-    if (!newUsername || newUsername.length < 2) {
-      alert('Username must be at least 2 characters')
-      return
-    }
-    
-    try {
-      console.log('Creating user with username:', newUsername)
-      console.log('Using API_BASE:', API_BASE)
-      
-      // Test connectivity to backend first
-      try {
-        const healthCheck = await fetch(`${API_BASE}/api/health`, {
-          credentials: 'include',
-          headers: { 'Accept': 'application/json' }
-        })
-        console.log('Health check status:', healthCheck.status)
-        
-        if (!healthCheck.ok) {
-          throw new Error(`Backend not accessible: ${healthCheck.status}`)
-        }
-      } catch (e) {
-        console.error('Backend health check failed:', e)
-        alert('Cannot connect to backend service. Please check if the service is running.')
-        return
-      }
-      
-      const res = await fetch(`${API_BASE}/api/users`, {
-        method: 'POST',
-        headers: { 
-          'Accept': 'application/json',
-          'Content-Type': 'application/json' 
-        },
-        credentials: 'include',
-        body: JSON.stringify({ username: newUsername })
-      })
-      
-      console.log('Create user response status:', res.status)
-      
-      // Get response as text first for debugging
-      const text = await res.text()
-      console.log('Raw create response:', text)
-      
-      if (res.ok) {
-        try {
-          const user = JSON.parse(text)
-          console.log('User created successfully:', user)
-          
-          // Clear the input
-          setNewUsername('')
-          
-          // Force refetch of users list
-          await fetchUsers()
-          
-          // Add a small delay for UI update
-          await new Promise(resolve => setTimeout(resolve, 1000))
-          
-          // Refresh users list again and select new user
-          await fetchUsers()
-          
-          // Check if the user was created properly
-          if (user && user.id) {
-            console.log('Selecting newly created user:', user.id)
-            await selectUser(user.id)
-          }
-          
-          alert(`User "${user.username}" created successfully!`)
-        } catch (e) {
-          console.error('Failed to parse create user response:', e)
-        }
-      } else {
-        console.error('Failed to create user:', text)
-        alert('Failed to create user: ' + (text || 'Unknown error'))
-      }
-    } catch (e) {
-      console.error('Error in createUser:', e)
-      alert('Error creating user: ' + e.message)
-    }
-  }
+  // Creating users is disabled in this build; users are seeded on the backend
   
   const selectUser = async (userId) => {
     if (!userId) {
@@ -292,31 +214,7 @@ function App() {
           </button>
         </div>
         
-        <div style={{ margin: '20px 0' }}>
-          <input
-            type="text"
-            placeholder="New username"
-            value={newUsername}
-            onChange={(e) => setNewUsername(e.target.value)}
-            style={{ padding: '8px', marginRight: '10px', minWidth: '180px' }}
-          />
-          <button 
-            onClick={createUser}
-            style={{ 
-              padding: '8px 16px', 
-              backgroundColor: '#4CAF50', 
-              color: 'white', 
-              border: 'none', 
-              borderRadius: '4px',
-              cursor: 'pointer' 
-            }}
-          >
-            Add User
-          </button>
-          <div style={{ marginTop: '5px', fontSize: '14px', color: '#666' }}>
-            New users will be automatically selected when added
-          </div>
-        </div>
+  {/* User creation is disabled; use seeded users Mike and Yvonne */}
       </div>
       
       {/* Timer */}

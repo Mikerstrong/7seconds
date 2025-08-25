@@ -55,6 +55,12 @@ CREATE TABLE IF NOT EXISTS user_points (
 # Create default user if none exist
 cur.execute("INSERT OR IGNORE INTO users (id, username) VALUES (1, 'default')")
 cur.execute("INSERT OR IGNORE INTO user_points (user_id, points, action_points) VALUES (1, 0, 0)")
+# Seed two test users: Mike and Yvonne
+cur.execute("INSERT OR IGNORE INTO users (username) VALUES ('Mike')")
+cur.execute("INSERT OR IGNORE INTO users (username) VALUES ('Yvonne')")
+# Ensure user_points rows exist for the seeded users
+cur.execute("INSERT OR IGNORE INTO user_points (user_id, points, action_points) SELECT id, 0, 0 FROM users WHERE username = 'Mike'")
+cur.execute("INSERT OR IGNORE INTO user_points (user_id, points, action_points) SELECT id, 0, 0 FROM users WHERE username = 'Yvonne'")
 conn.commit()
 conn.close()
 
