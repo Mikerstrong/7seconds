@@ -278,14 +278,24 @@ function App() {
             placeholder="New username"
             value={newUsername}
             onChange={(e) => setNewUsername(e.target.value)}
-            style={{ padding: '8px', marginRight: '10px' }}
+            style={{ padding: '8px', marginRight: '10px', minWidth: '180px' }}
           />
           <button 
             onClick={createUser}
-            style={{ padding: '8px 16px' }}
+            style={{ 
+              padding: '8px 16px', 
+              backgroundColor: '#4CAF50', 
+              color: 'white', 
+              border: 'none', 
+              borderRadius: '4px',
+              cursor: 'pointer' 
+            }}
           >
             Add User
           </button>
+          <div style={{ marginTop: '5px', fontSize: '14px', color: '#666' }}>
+            New users will be automatically selected when added
+          </div>
         </div>
       </div>
       
