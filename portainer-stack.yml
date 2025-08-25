@@ -6,7 +6,7 @@ services:
       context: "https://github.com/Mikerstrong/7seconds.git#main:backend"
       dockerfile: Dockerfile
     ports:
-      - "3001:3001"
+      - "3002:3001"
     volumes:
       - db_data:/data
     environment:
