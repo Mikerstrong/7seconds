@@ -96,7 +96,6 @@ function App() {
   
   const createUser = async () => {
     if (!newUsername || newUsername.length < 2) return
-    
     try {
       const res = await fetch(`${API_BASE}/api/users`, {
         method: 'POST',
@@ -104,12 +103,12 @@ function App() {
         credentials: 'include',
         body: JSON.stringify({ username: newUsername })
       })
-      
       if (res.ok) {
         const user = await res.json()
-        setUsers([...users, user])
         setNewUsername('')
-        selectUser(user.id)
+        // Refresh user list and select new user
+        await fetchUsers()
+        await selectUser(user.id)
       }
     } catch (e) {
       console.error(e)
@@ -124,11 +123,11 @@ function App() {
         credentials: 'include',
         body: JSON.stringify({ user_id: userId })
       })
-      
       if (res.ok) {
         const user = await res.json()
         setCurrentUser(user)
-        fetchPoints()
+        await fetchPoints()
+        await fetchCurrentUser()
       }
     } catch (e) {
       console.error(e)
