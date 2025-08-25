@@ -137,6 +137,24 @@ function App() {
     
     try {
       console.log('Creating user with username:', newUsername)
+      console.log('Using API_BASE:', API_BASE)
+      
+      // Test connectivity to backend first
+      try {
+        const healthCheck = await fetch(`${API_BASE}/api/health`, {
+          credentials: 'include',
+          headers: { 'Accept': 'application/json' }
+        })
+        console.log('Health check status:', healthCheck.status)
+        
+        if (!healthCheck.ok) {
+          throw new Error(`Backend not accessible: ${healthCheck.status}`)
+        }
+      } catch (e) {
+        console.error('Backend health check failed:', e)
+        alert('Cannot connect to backend service. Please check if the service is running.')
+        return
+      }
       
       const res = await fetch(`${API_BASE}/api/users`, {
         method: 'POST',
@@ -176,6 +194,8 @@ function App() {
             console.log('Selecting newly created user:', user.id)
             await selectUser(user.id)
           }
+          
+          alert(`User "${user.username}" created successfully!`)
         } catch (e) {
           console.error('Failed to parse create user response:', e)
         }
