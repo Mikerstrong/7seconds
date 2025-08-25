@@ -2,7 +2,7 @@ import os
 import sqlite3
 import time
 import threading
-from flask import Flask, jsonify, request, session
+from flask import Flask, jsonify, request, session, make_response
 from flask_cors import CORS
 from datetime import datetime, timezone
 
@@ -18,7 +18,13 @@ def get_db():
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "dev_secret_key")
 # Enable CORS with credentials support for cookies/sessions
-CORS(app, supports_credentials=True, origins=["*"], allow_headers=["Content-Type", "Authorization", "X-Requested-With"])
+CORS(app, 
+     supports_credentials=True, 
+     origins=["*"], 
+     allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
+     expose_headers=["Content-Type", "Authorization"],
+     methods=["GET", "POST", "OPTIONS"]
+)
 
 # Ensure database and seed tables exist
 os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
@@ -92,9 +98,23 @@ def get_users():
     conn = get_db()
     cur = conn.cursor()
     cur.execute("SELECT id, username FROM users ORDER BY username")
-    users = [{"id": row[0], "username": row[1]} for row in cur.fetchall()]
+    rows = cur.fetchall()
+    
+    # Debug log
+    print(f"Found {len(rows)} users in database")
+    
+    # Format as list of dictionaries
+    users = []
+    for row in rows:
+        users.append({"id": row[0], "username": row[1]})
+        print(f"User: id={row[0]}, username={row[1]}")
+    
     conn.close()
-    return jsonify({"users": users})
+    
+    # Return explicitly structured JSON
+    response = jsonify({"users": users})
+    print(f"Returning users response: {response.data}")
+    return response
 
 
 @app.route("/api/users", methods=["POST"])
@@ -113,9 +133,22 @@ def create_user():
         user_id = cur.lastrowid
         cur.execute("INSERT INTO user_points (user_id) VALUES (?)", (user_id,))
         conn.commit()
+        
+        # Debug info
+        print(f"Created new user: id={user_id}, username={username}")
+        
+        # Set session for the new user
+        session["user_id"] = user_id
+        print(f"Set session user_id to {user_id}")
+        
         conn.close()
-        return jsonify({"id": user_id, "username": username})
-    except sqlite3.IntegrityError:
+        
+        # Return with explicit content type
+        response = make_response(jsonify({"id": user_id, "username": username}))
+        response.headers['Content-Type'] = 'application/json'
+        return response
+    except sqlite3.IntegrityError as e:
+        print(f"Error creating user: {e}")
         conn.close()
         return jsonify({"error": "username already exists"}), 400
 

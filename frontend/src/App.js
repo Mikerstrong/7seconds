@@ -49,13 +49,41 @@ function App() {
   
   const fetchUsers = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/users`, { credentials: 'include' })
-      const data = await res.json()
-      if (Array.isArray(data.users)) {
-        console.log('Got users:', data.users)
-        setUsers(data.users)
-      } else {
-        console.error('Invalid users data', data)
+      console.log('Fetching users from:', `${API_BASE}/api/users`)
+      const res = await fetch(`${API_BASE}/api/users`, { 
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        }
+      })
+      
+      console.log('Users response status:', res.status)
+      
+      if (!res.ok) {
+        console.error('Error response:', res.status, res.statusText)
+        setUsers([])
+        return
+      }
+      
+      // Get response as text first for debugging
+      const text = await res.text()
+      console.log('Raw response:', text)
+      
+      // Try to parse as JSON
+      try {
+        const data = JSON.parse(text)
+        console.log('Parsed users data:', data)
+        
+        if (data && Array.isArray(data.users)) {
+          console.log('Setting users:', data.users)
+          setUsers(data.users)
+        } else {
+          console.error('Invalid users format, expected array:', data)
+          setUsers([])
+        }
+      } catch (e) {
+        console.error('Failed to parse users JSON:', e)
         setUsers([])
       }
     } catch (e) {
@@ -102,38 +130,62 @@ function App() {
   }
   
   const createUser = async () => {
-    if (!newUsername || newUsername.length < 2) return
+    if (!newUsername || newUsername.length < 2) {
+      alert('Username must be at least 2 characters')
+      return
+    }
+    
     try {
       console.log('Creating user with username:', newUsername)
+      
       const res = await fetch(`${API_BASE}/api/users`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Accept': 'application/json',
+          'Content-Type': 'application/json' 
+        },
         credentials: 'include',
         body: JSON.stringify({ username: newUsername })
       })
       
+      console.log('Create user response status:', res.status)
+      
+      // Get response as text first for debugging
+      const text = await res.text()
+      console.log('Raw create response:', text)
+      
       if (res.ok) {
-        const user = await res.json()
-        console.log('User created:', user)
-        setNewUsername('')
-        
-        // Wait for users list to update before selecting
-        setTimeout(async () => {
-          // Refresh users list
+        try {
+          const user = JSON.parse(text)
+          console.log('User created successfully:', user)
+          
+          // Clear the input
+          setNewUsername('')
+          
+          // Force refetch of users list
           await fetchUsers()
           
-          // Select the new user
+          // Add a small delay for UI update
+          await new Promise(resolve => setTimeout(resolve, 1000))
+          
+          // Refresh users list again and select new user
+          await fetchUsers()
+          
+          // Check if the user was created properly
           if (user && user.id) {
-            console.log('Selecting new user with ID:', user.id)
+            console.log('Selecting newly created user:', user.id)
             await selectUser(user.id)
           }
-        }, 500)
+        } catch (e) {
+          console.error('Failed to parse create user response:', e)
+        }
       } else {
-        const error = await res.json()
-        console.error('Failed to create user:', error)
+        console.error('Failed to create user:', text)
+        alert('Failed to create user: ' + (text || 'Unknown error'))
       }
     } catch (e) {
       console.error('Error in createUser:', e)
+      alert('Error creating user: ' + e.message)
     }
   }
   
