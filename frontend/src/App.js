@@ -203,8 +203,8 @@ function App() {
             <option value="" disabled>Select a user</option>
             {users && users.length > 0 ? (
               users.map(user => (
-                <option key={user.id} value={user.id}>
-                  {user.username}
+                <option key={user} value={user}>
+                  {user}
                 </option>
               ))
             ) : (
