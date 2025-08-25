@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: "https://github.com/Mikerstrong/7seconds.git#main:backend"
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    volumes:
+      - db_data:/data
+    environment:
+      - DB_PATH=/data/score.db
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: "https://github.com/Mikerstrong/7seconds.git#main:frontend"
+      dockerfile: Dockerfile
+    ports:
+      - "7777:7777"
+    environment:
+      # When deployed inside the same compose network, use the service name to reach the backend
+      - REACT_APP_API_BASE=http://backend:3001
+    restart: unless-stopped
+
+volumes:
+  db_data:
