@@ -39,6 +39,11 @@ function App() {
     }
   }, [])
   
+  // Pre-seed users directly in the frontend
+  useEffect(() => {
+    setUsers(['Mike', 'Yvonne']);
+  }, []);
+  
   const fetchHealth = async () => {
     try {
       await fetch(`${API_BASE}/api/health`, { credentials: 'include' })
